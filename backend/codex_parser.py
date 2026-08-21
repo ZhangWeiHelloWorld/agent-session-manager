@@ -15,7 +15,7 @@ import datetime
 import re
 from typing import Dict, List, Any, Optional, Tuple
 
-CODEX_DIR = os.path.expanduser('~/.codex')
+CODEX_DIR = os.environ.get('CODEX_DIR') or os.path.expanduser('~/.codex')
 STATE_DB_PATH = os.path.join(CODEX_DIR, 'state_5.sqlite')
 SESSION_INDEX_PATH = os.path.join(CODEX_DIR, 'session_index.jsonl')
 SESSIONS_DIR = os.path.join(CODEX_DIR, 'sessions')

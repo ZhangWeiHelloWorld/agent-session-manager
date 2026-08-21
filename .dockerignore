@@ -1,0 +1,13 @@
+.git
+.gitignore
+.dockerignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+temp_test_*
+.DS_Store
+.idea
+.vscode
+*.bak*

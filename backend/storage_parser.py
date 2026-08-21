@@ -17,7 +17,7 @@ import datetime
 import re
 from typing import Dict, List, Any, Optional, Tuple
 
-ANTIGRAVITY_DIR = os.path.expanduser('~/.gemini/antigravity')
+ANTIGRAVITY_DIR = os.environ.get('ANTIGRAVITY_DIR') or os.path.expanduser('~/.gemini/antigravity')
 PB_PATH = os.path.join(ANTIGRAVITY_DIR, 'agyhub_summaries_proto.pb')
 CONV_DIR = os.path.join(ANTIGRAVITY_DIR, 'conversations')
 BRAIN_DIR = os.path.join(ANTIGRAVITY_DIR, 'brain')
