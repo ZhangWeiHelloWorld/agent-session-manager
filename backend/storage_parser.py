@@ -378,6 +378,14 @@ class AntigravityStorage:
         """
         brain_path = os.path.join(self.brain_dir, cid)
         transcript_path = os.path.join(brain_path, '.system_generated', 'logs', 'transcript.jsonl')
+        db_file = os.path.join(self.conv_dir, f"{cid}.db")
+        ann_file = os.path.join(self.annotations_dir, f"{cid}.pbtxt")
+
+        # 校验该会话是否属于 Antigravity
+        if not os.path.exists(brain_path) and not os.path.exists(db_file) and not os.path.exists(ann_file):
+            pb_map = self.load_pb_summaries()
+            if cid not in pb_map:
+                return None
         
         chat_turns = []
         artifacts = []

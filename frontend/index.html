@@ -917,7 +917,8 @@
           conversationDetails.value = null;
           expandedTools.value = {};
           try {
-            const res = await fetch(`/api/conversation/${conv.id}`);
+            const platform = conv.platform || currentPlatform.value;
+            const res = await fetch(`/api/conversation/${conv.id}?platform=${platform}`);
             const data = await res.json();
             if (data.success) {
               conversationDetails.value = data.data;
@@ -1044,7 +1045,8 @@
 
         // 导出相关
         const exportSingle = (cid) => {
-          window.open(`/api/export/markdown/${cid}`, '_blank');
+          const platform = currentPlatform.value;
+          window.open(`/api/export/markdown/${cid}?platform=${platform}`, '_blank');
         };
 
         const batchExport = async () => {

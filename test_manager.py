@@ -24,10 +24,12 @@ from storage_parser import (
     clean_human_user_prompt
 )
 from codex_parser import (
+    CodexStorage,
     extract_codex_project,
     clean_human_codex_user_prompt
 )
 from trash_manager import TrashManager
+import sqlite3
 
 
 class TestProtobufWire(unittest.TestCase):
@@ -153,6 +155,113 @@ class TestTrashManagerIsolated(unittest.TestCase):
         purge_res = self.trash.permanent_delete([tkey2])
         self.assertTrue(purge_res['success'])
         self.assertEqual(len(self.trash.list_trash()), 0)
+
+
+class TestCodexDockerPathResolution(unittest.TestCase):
+    def setUp(self):
+        self.temp_codex = os.path.join(CURRENT_DIR, 'temp_test_codex')
+        if os.path.exists(self.temp_codex):
+            shutil.rmtree(self.temp_codex)
+        os.makedirs(self.temp_codex, exist_ok=True)
+        
+        self.session_rel = os.path.join('2026', '08', '20')
+        self.sessions_dir = os.path.join(self.temp_codex, 'sessions', self.session_rel)
+        os.makedirs(self.sessions_dir, exist_ok=True)
+
+        self.cid = '01a01d1e-d1ab-7d11-a32e-1e2b2ef56078'
+        self.rollout_filename = f'rollout-2026-08-20T11-02-34-{self.cid}.jsonl'
+        self.actual_rollout_path = os.path.join(self.sessions_dir, self.rollout_filename)
+        
+        # 写入模拟的 Codex 对话轮次
+        with open(self.actual_rollout_path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps({
+                "type": "response_item",
+                "payload": {"role": "user", "content": [{"text": "<environment_context>cwd: /app</environment_context>\n解决自动序号后端标记缺失"}]}
+            }) + "\n")
+            f.write(json.dumps({
+                "type": "response_item",
+                "payload": {"role": "assistant", "content": [{"text": "已成功定位并修复序号后端逻辑！"}]}
+            }) + "\n")
+
+        # 模拟在宿主机创建但挂载进 Docker 的 sqlite 数据库，其中存储的是宿主机路径
+        self.host_rollout_path = f'/Users/hostuser/.codex/sessions/{self.session_rel}/{self.rollout_filename}'
+        self.db_path = os.path.join(self.temp_codex, 'state_5.sqlite')
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE threads (
+                id TEXT PRIMARY KEY,
+                title TEXT,
+                cwd TEXT,
+                rollout_path TEXT,
+                created_at INTEGER,
+                updated_at INTEGER,
+                created_at_ms INTEGER,
+                updated_at_ms INTEGER,
+                first_user_message TEXT,
+                model TEXT,
+                tokens_used INTEGER,
+                archived INTEGER
+            )
+        """)
+        cur.execute("""
+            INSERT INTO threads (id, title, cwd, rollout_path, created_at, updated_at, first_user_message, model)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            self.cid,
+            '解决自动序号后端标记缺失',
+            '/Users/hostuser/projects/my-app',
+            self.host_rollout_path,
+            1787190000,
+            1787190100,
+            '解决自动序号后端标记缺失',
+            'gpt-5.6-sol'
+        ))
+        conn.commit()
+        conn.close()
+
+        self.storage = CodexStorage(self.temp_codex)
+
+    def tearDown(self):
+        if os.path.exists(self.temp_codex):
+            shutil.rmtree(self.temp_codex)
+
+    def test_codex_docker_path_resolution(self):
+        """测试在 Docker/跨平台路径下，CodexStorage 能自动校准宿主机路径并读取对话"""
+        convs = self.storage.get_all_conversations()
+        self.assertEqual(len(convs), 1)
+        conv = convs[0]
+        self.assertEqual(conv['id'], self.cid)
+        self.assertTrue(conv['has_rollout'])
+        self.assertGreater(conv['total_size'], 0)
+        self.assertEqual(conv['rollout_path'], self.actual_rollout_path)
+
+        # 测试详情获取与文本清洗
+        details = self.storage.get_conversation_details(self.cid)
+        self.assertIsNotNone(details)
+        self.assertEqual(details['turns_count'], 2)
+        self.assertEqual(details['turns'][0]['role'], 'user')
+        self.assertEqual(details['turns'][0]['text'], '解决自动序号后端标记缺失')
+        self.assertEqual(details['turns'][1]['role'], 'assistant')
+        self.assertIn('已成功定位并修复', details['turns'][1]['text'])
+
+        # 测试 Markdown 导出
+        md = self.storage.export_conversation_markdown(self.cid)
+        self.assertIn('解决自动序号后端标记缺失', md)
+        self.assertIn('已成功定位并修复', md)
+
+        # 测试移入回收站与还原
+        del_res = self.storage.move_to_trash([self.cid])
+        self.assertTrue(del_res['success'])
+        self.assertFalse(os.path.exists(self.actual_rollout_path))
+
+        trash_items = self.storage.list_trash()
+        self.assertEqual(len(trash_items), 1)
+        tkey = trash_items[0]['trash_key']
+
+        restore_res = self.storage.restore_from_trash([tkey])
+        self.assertTrue(restore_res['success'])
+        self.assertTrue(os.path.exists(self.actual_rollout_path))
 
 
 if __name__ == '__main__':

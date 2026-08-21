@@ -88,6 +88,45 @@ class CodexStorage:
         self.trash_dir = os.path.join(base_dir, 'trash')
         os.makedirs(self.trash_dir, exist_ok=True)
 
+    def _resolve_rollout_path(self, raw_path: Optional[str], cid: Optional[str] = None) -> Optional[str]:
+        """
+        动态解析并校准 Codex rollout 轨迹文件路径。
+        解决 Docker 容器挂载或跨平台路径迁移时，数据库中存储的宿主机路径（如 /Users/... 或 C:\\...）
+        与容器内部挂载路径（如 /root/.codex/sessions/...）不一致导致找不到文件的问题。
+        """
+        if raw_path and os.path.exists(raw_path):
+            return os.path.abspath(raw_path)
+
+        if raw_path:
+            p = raw_path.replace('\\', '/')
+            # 1. 匹配 sessions 子目录结构 (如 2026/08/20/rollout-xxx.jsonl)
+            if '/sessions/' in p:
+                rel = p.split('/sessions/', 1)[1]
+                target = os.path.join(self.sessions_dir, *rel.split('/'))
+                if os.path.exists(target):
+                    return target
+            # 2. 匹配 archived_sessions 子目录
+            if '/archived_sessions/' in p:
+                rel = p.split('/archived_sessions/', 1)[1]
+                target = os.path.join(self.base_dir, 'archived_sessions', *rel.split('/'))
+                if os.path.exists(target):
+                    return target
+            # 3. 按基础文件名直接检索
+            basename = os.path.basename(p)
+            if basename and os.path.exists(self.sessions_dir):
+                for root, _, files in os.walk(self.sessions_dir):
+                    if basename in files:
+                        return os.path.join(root, basename)
+
+        # 4. 根据 CID 精准匹配 rollout 文件
+        if cid and os.path.exists(self.sessions_dir):
+            for root, _, files in os.walk(self.sessions_dir):
+                for f in files:
+                    if cid in f and f.endswith('.jsonl'):
+                        return os.path.join(root, f)
+
+        return raw_path if (raw_path and os.path.exists(raw_path)) else None
+
     def get_all_conversations(self) -> List[Dict[str, Any]]:
         if not os.path.exists(self.state_db):
             return []
@@ -108,7 +147,7 @@ class CodexStorage:
                 cid = r['id']
                 title = r['title'] or ''
                 cwd = r['cwd'] or ''
-                rollout_path = r['rollout_path'] or ''
+                raw_rollout_path = r['rollout_path'] or ''
                 first_msg = clean_human_codex_user_prompt(r['first_user_message'] or '')
                 model = r['model'] or ''
                 tokens_used = r['tokens_used'] or 0
@@ -116,6 +155,7 @@ class CodexStorage:
                 created_ts = r['created_at']
                 updated_ts = r['updated_at']
 
+                rollout_path = self._resolve_rollout_path(raw_rollout_path, cid)
                 rollout_size = 0
                 has_rollout = False
                 if rollout_path and os.path.exists(rollout_path):
@@ -148,7 +188,7 @@ class CodexStorage:
                     'updated_time_str': format_timestamp(updated_ts or created_ts),
                     'total_size': rollout_size,
                     'total_size_str': format_bytes(rollout_size),
-                    'rollout_path': rollout_path,
+                    'rollout_path': rollout_path or raw_rollout_path,
                     'has_rollout': has_rollout,
                     'in_pb': False
                 })
@@ -165,7 +205,7 @@ class CodexStorage:
         if not conv:
             return None
 
-        rollout_path = conv.get('rollout_path')
+        rollout_path = self._resolve_rollout_path(conv.get('rollout_path'), cid)
         chat_turns = []
 
         if rollout_path and os.path.exists(rollout_path):
@@ -326,7 +366,8 @@ class CodexStorage:
                 trash_item_dir = os.path.join(self.trash_dir, trash_item_name)
                 os.makedirs(trash_item_dir, exist_ok=True)
 
-                rollout_p = row_dict.get('rollout_path')
+                raw_rollout_p = row_dict.get('rollout_path')
+                rollout_p = self._resolve_rollout_path(raw_rollout_p, cid)
                 item_freed = 0
                 moved_files = []
 
@@ -433,8 +474,16 @@ class CodexStorage:
                     tf = mf.get('trash')
                     orig = mf.get('original')
                     if tf and orig and os.path.exists(tf):
-                        os.makedirs(os.path.dirname(orig), exist_ok=True)
-                        shutil.move(tf, orig)
+                        target_orig = orig
+                        if not os.path.isabs(target_orig) or not os.path.exists(os.path.dirname(target_orig)):
+                            p = orig.replace('\\', '/')
+                            if '/sessions/' in p:
+                                rel = p.split('/sessions/', 1)[1]
+                                target_orig = os.path.join(self.sessions_dir, *rel.split('/'))
+                            else:
+                                target_orig = os.path.join(self.sessions_dir, os.path.basename(orig))
+                        os.makedirs(os.path.dirname(target_orig), exist_ok=True)
+                        shutil.move(tf, target_orig)
 
                 trow = manifest.get('thread_row')
                 if trow:

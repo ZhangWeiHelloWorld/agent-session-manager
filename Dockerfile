@@ -9,11 +9,15 @@ LABEL maintainer="dazhangwei" \
       description="A lightweight, zero-dependency local session manager & workspace cleaner for AI Coding Agents." \
       version="1.0.0"
 
+# 安装时区支持与 CA 证书
+RUN apk add --no-cache tzdata ca-certificates
+
 # 设置工作目录
 WORKDIR /app
 
 # 设置环境变量默认值 (支持运行时通过 -e 或 run 参数覆盖)
 ENV PYTHONUNBUFFERED=1 \
+    TZ=Asia/Shanghai \
     HOST=0.0.0.0 \
     PORT=8999 \
     NO_BROWSER=1 \

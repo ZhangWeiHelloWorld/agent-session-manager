@@ -150,12 +150,22 @@ class UnifiedAPIHandler(BaseHTTPRequestHandler):
                 self._send_json({'success': False, 'error': 'Missing conversation ID'}, status=400)
                 return
             try:
-                # 先查 Antigravity，再查 Codex
-                details = self.agy_storage.get_conversation_details(cid)
-                if not details or not details.get('messages'):
+                details = None
+                if platform_req == 'codex':
+                    details = self.codex_storage.get_conversation_details(cid)
+                elif platform_req == 'antigravity':
+                    details = self.agy_storage.get_conversation_details(cid)
+                else:
+                    # 未显式指定平台时，优先查找包含实际对话轮次的引擎
                     codex_det = self.codex_storage.get_conversation_details(cid)
-                    if codex_det:
+                    if codex_det and codex_det.get('turns_count', 0) > 0:
                         details = codex_det
+                    else:
+                        agy_det = self.agy_storage.get_conversation_details(cid)
+                        if agy_det and (agy_det.get('turns_count', 0) > 0 or agy_det.get('artifacts')):
+                            details = agy_det
+                        else:
+                            details = codex_det or agy_det
 
                 if details:
                     self._send_json({'success': True, 'data': details})
@@ -194,11 +204,20 @@ class UnifiedAPIHandler(BaseHTTPRequestHandler):
         elif path.startswith('/api/export/markdown/'):
             cid = path[len('/api/export/markdown/'):].strip()
             try:
-                md_content = self.agy_storage.export_conversation_markdown(cid)
-                if not md_content or "无可用数据" in md_content:
+                md_content = None
+                if platform_req == 'codex':
+                    md_content = self.codex_storage.export_conversation_markdown(cid)
+                elif platform_req == 'antigravity':
+                    md_content = self.agy_storage.export_conversation_markdown(cid)
+                else:
                     codex_md = self.codex_storage.export_conversation_markdown(cid)
                     if codex_md and "无可用数据" not in codex_md:
                         md_content = codex_md
+                    else:
+                        md_content = self.agy_storage.export_conversation_markdown(cid)
+
+                if not md_content:
+                    md_content = f"# 会话 {cid} (无可用数据)\n"
 
                 self._set_headers(200, 'text/markdown; charset=utf-8')
                 self.send_header('Content-Disposition', f'attachment; filename="chat_export_{cid[:8]}.md"')
