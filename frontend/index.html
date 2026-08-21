@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Agent 会话管理中心 (Agent Session Manager)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- Marked Markdown Parser CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            antigravity: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            },
+            codex: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* 滚动条美化 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.4);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(156, 163, 175, 0.7);
+    }
+    [v-cloak] { display: none; }
+
+    /* Markdown 格式渲染样式 */
+    .prose-custom h1 { font-size: 1.25rem; font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; }
+    .prose-custom h2 { font-size: 1.1rem; font-weight: 700; margin-top: 0.85rem; margin-bottom: 0.4rem; }
+    .prose-custom h3 { font-size: 0.95rem; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.3rem; }
+    .prose-custom p { margin-bottom: 0.6rem; line-height: 1.6; }
+    .prose-custom ul { list-style-type: disc; margin-left: 1.25rem; margin-bottom: 0.6rem; }
+    .prose-custom ol { list-style-type: decimal; margin-left: 1.25rem; margin-bottom: 0.6rem; }
+    .prose-custom li { margin-bottom: 0.25rem; }
+    .prose-custom code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.82em; background: rgba(148, 163, 184, 0.18); padding: 0.15rem 0.35rem; border-radius: 0.3rem; }
+    .prose-custom pre { background: #0f172a; color: #f8fafc; padding: 0.85rem; border-radius: 0.6rem; overflow-x: auto; margin-bottom: 0.75rem; font-size: 0.8rem; line-height: 1.45; }
+    .prose-custom pre code { background: transparent; padding: 0; color: inherit; }
+    .prose-custom blockquote { border-left: 3px solid #6366f1; padding-left: 0.75rem; color: #64748b; margin-bottom: 0.6rem; font-style: italic; }
+    .prose-custom hr { border: 0; border-top: 1px solid rgba(226, 232, 240, 0.8); margin: 1rem 0; }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen transition-colors duration-200 antialiased font-sans">
+  <div id="app" v-cloak class="flex flex-col h-screen overflow-hidden">
+    
+    <!-- 顶部导航栏 -->
+    <header class="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur px-6 flex items-center justify-between shrink-0 z-20">
+      
+      <!-- 平台独立切换选项卡 -->
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-2 mr-2">
+          <div :class="currentPlatform === 'antigravity' ? 'bg-indigo-600' : 'bg-emerald-600'" 
+               class="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-md transition-colors duration-300">
+            <span v-if="currentPlatform === 'antigravity'" class="text-lg">🪐</span>
+            <span v-else class="text-lg">🤖</span>
+          </div>
+          <span class="font-bold text-base hidden sm:inline-block">AI 会话管理</span>
+        </div>
+
+        <!-- 独立平台切换器 -->
+        <div class="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+          <button @click="switchPlatform('antigravity')" 
+                  :class="currentPlatform === 'antigravity' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm font-bold' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-medium'"
+                  class="px-4 py-1.5 rounded-lg text-xs flex items-center space-x-2 transition-all duration-200">
+            <span>🪐 Antigravity 会话</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 font-mono">
+              {{ platformCounts.antigravity }}
+            </span>
+          </button>
+
+          <button @click="switchPlatform('codex')" 
+                  :class="currentPlatform === 'codex' ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm font-bold' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-medium'"
+                  class="px-4 py-1.5 rounded-lg text-xs flex items-center space-x-2 transition-all duration-200">
+            <span>🤖 OpenAI Codex 会话</span>
+            <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-50 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 font-mono">
+              {{ platformCounts.codex }}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 概览指标卡片 -->
+      <div class="hidden lg:flex items-center space-x-6">
+        <div class="text-right">
+          <div class="text-xs text-slate-400">{{ currentPlatform === 'antigravity' ? 'Antigravity' : 'Codex' }} 会话总数</div>
+          <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ conversations.length }} 场</div>
+        </div>
+        <div class="h-8 w-px bg-slate-200 dark:bg-slate-800"></div>
+        <div class="text-right">
+          <div class="text-xs text-slate-400">工程项目</div>
+          <div class="text-sm font-bold text-slate-700 dark:text-slate-200">{{ projects.length }} 个</div>
+        </div>
+        <div class="h-8 w-px bg-slate-200 dark:bg-slate-800"></div>
+        <div class="text-right">
+          <div class="text-xs text-slate-400">占用磁盘空间</div>
+          <div :class="currentPlatform === 'antigravity' ? 'text-indigo-600 dark:text-indigo-400' : 'text-emerald-600 dark:text-emerald-400'" class="text-sm font-bold font-mono">
+            {{ stats.total_size_str || '0 B' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧控制按钮 -->
+      <div class="flex items-center space-x-2">
+        <!-- 独立回收站入口 -->
+        <button @click="openTrashModal" 
+                class="relative px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center space-x-1.5 transition">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+          </svg>
+          <span>{{ currentPlatform === 'antigravity' ? 'Antigravity' : 'Codex' }} 回收站</span>
+          <span v-if="currentTrashCount > 0" 
+                class="ml-1 px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-rose-500 text-white">
+            {{ currentTrashCount }}
+          </span>
+        </button>
+
+        <!-- 刷新数据 -->
+        <button @click="fetchConversations" :disabled="loading"
+                class="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                title="刷新数据">
+          <svg :class="{'animate-spin': loading}" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+        </button>
+
+        <!-- 主题切换 -->
+        <button @click="toggleDarkMode" 
+                class="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                title="切换深浅模式">
+          <svg v-if="darkMode" class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 9h-1m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+          </svg>
+          <svg v-else class="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- 主体区域 -->
+    <div class="flex flex-1 overflow-hidden">
+      
+      <!-- 左侧：工程导航分类栏 (与客户端侧边栏 100% 对齐) -->
+      <aside class="w-64 border-r border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 flex flex-col shrink-0">
+        <div class="p-4 border-b border-slate-100 dark:border-slate-800/60 flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            {{ currentPlatform === 'antigravity' ? 'Antigravity 工程' : 'Codex 项目' }}
+          </span>
+          <span class="text-xs text-slate-400 font-mono">{{ projects.length }} 个</span>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-2 space-y-1">
+          <!-- 全部工程 -->
+          <button @click="selectedProject = 'ALL'"
+                  :class="selectedProject === 'ALL' ? (currentPlatform === 'antigravity' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 font-semibold' : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 font-semibold') : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm border text-left transition group">
+            <div class="flex items-center space-x-2.5 truncate">
+              <span class="text-base">📁</span>
+              <span class="truncate">全部会话</span>
+            </div>
+            <span class="px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-mono">
+              {{ conversations.length }}
+            </span>
+          </button>
+
+          <!-- 独立项目列表 -->
+          <div class="pt-2 pb-1">
+            <div class="px-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              {{ currentPlatform === 'antigravity' ? 'Projects (工程)' : '项目 (Projects)' }}
+            </div>
+          </div>
+
+          <button v-for="proj in realProjects" :key="proj.name"
+                  @click="selectedProject = proj.name"
+                  :class="selectedProject === proj.name ? (currentPlatform === 'antigravity' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 font-semibold' : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 font-semibold') : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm border text-left transition group">
+            <div class="flex items-center space-x-2.5 truncate">
+              <span class="text-base shrink-0">{{ getProjectIcon(proj.name) }}</span>
+              <div class="truncate">
+                <div class="truncate font-medium text-xs">{{ proj.name }}</div>
+                <div class="text-[10px] text-slate-400">{{ proj.total_size_str }}</div>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-mono shrink-0">
+              {{ proj.count }}
+            </span>
+          </button>
+
+          <!-- 独立/未关联工程的会话 -->
+          <div class="pt-2 pb-1" v-if="unfiledProject">
+            <div class="px-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              {{ currentPlatform === 'antigravity' ? 'Conversations (最近会话)' : '最近 (Recent)' }}
+            </div>
+          </div>
+
+          <button v-if="unfiledProject"
+                  @click="selectedProject = unfiledProject.name"
+                  :class="selectedProject === unfiledProject.name ? (currentPlatform === 'antigravity' ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 font-semibold' : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 font-semibold') : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 border-transparent'"
+                  class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm border text-left transition group">
+            <div class="flex items-center space-x-2.5 truncate">
+              <span class="text-base shrink-0">💬</span>
+              <div class="truncate">
+                <div class="truncate font-medium text-xs">{{ currentPlatform === 'antigravity' ? '最近未关联工程会话' : '最近独立会话' }}</div>
+                <div class="text-[10px] text-slate-400">{{ unfiledProject.total_size_str }}</div>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-mono shrink-0">
+              {{ unfiledProject.count }}
+            </span>
+          </button>
+        </div>
+
+        <!-- 底部提示 -->
+        <div class="p-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400 space-y-1 bg-slate-50/50 dark:bg-slate-900/30">
+          <div class="flex items-center space-x-1 font-medium" :class="currentPlatform === 'antigravity' ? 'text-indigo-500' : 'text-emerald-500'">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>{{ currentPlatform === 'antigravity' ? 'Antigravity 目录' : 'Codex 目录' }}</span>
+          </div>
+          <p class="text-[10px] leading-relaxed font-mono text-slate-400/80 truncate">
+            {{ currentPlatform === 'antigravity' ? '~/.gemini/antigravity' : '~/.codex' }}
+          </p>
+        </div>
+      </aside>
+
+      <!-- 右侧主体：会话管理与列表 -->
+      <main class="flex-1 flex flex-col overflow-hidden bg-slate-100/40 dark:bg-slate-950">
+        
+        <!-- 工具栏：搜索、快捷筛选、批量操作 -->
+        <div class="p-4 border-b border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur flex flex-wrap gap-3 items-center justify-between shrink-0">
+          
+          <!-- 搜索框与筛选器 -->
+          <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[320px]">
+            <!-- 搜索 -->
+            <div class="relative flex-1 max-w-md">
+              <input v-model="searchQuery" type="text" :placeholder="'搜索 ' + (currentPlatform === 'antigravity' ? 'Antigravity' : 'Codex') + ' 会话标题、提问内容、路径...'"
+                     class="w-full pl-9 pr-4 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 transition"
+                     :class="currentPlatform === 'antigravity' ? 'focus:ring-indigo-500' : 'focus:ring-emerald-500'">
+              <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+              </svg>
+              <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+
+            <!-- 时间快捷筛选 -->
+            <select v-model="timeFilter" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none">
+              <option value="ALL">全部时间</option>
+              <option value="7D">7 天前以前</option>
+              <option value="14D">14 天前以前</option>
+              <option value="30D">30 天前以前</option>
+            </select>
+
+            <!-- 体积快捷筛选 -->
+            <select v-model="sizeFilter" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none">
+              <option value="ALL">全部体积</option>
+              <option value="100K">体积 > 100 KB</option>
+              <option value="1M">体积 > 1 MB</option>
+              <option value="5M">体积 > 5 MB</option>
+            </select>
+
+            <!-- 排序方式 -->
+            <select v-model="sortBy" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none">
+              <option value="time_desc">最新活跃排序 ↓</option>
+              <option value="time_asc">最早活跃排序 ↑</option>
+              <option value="size_desc">占用空间排序 ↓</option>
+            </select>
+          </div>
+
+          <!-- 批量操作动作区 -->
+          <div class="flex items-center space-x-2 shrink-0">
+            <!-- 批量全选/反选快捷按钮 -->
+            <button @click="toggleSelectFiltered" class="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 transition">
+              {{ isAllFilteredSelected ? '取消全选' : '全选筛选结果 (' + filteredConversations.length + ')' }}
+            </button>
+
+            <!-- 批量导出 -->
+            <button @click="batchExport" :disabled="selectedCids.length === 0"
+                    :class="selectedCids.length > 0 ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-200' : 'opacity-40 cursor-not-allowed border-slate-200 dark:border-slate-800 text-slate-400'"
+                    class="px-3 py-1.5 text-xs font-medium rounded-lg border flex items-center space-x-1 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+              </svg>
+              <span>批量导出</span>
+            </button>
+
+            <!-- 批量移入回收站 -->
+            <button @click="confirmBatchDelete" :disabled="selectedCids.length === 0"
+                    :class="selectedCids.length > 0 ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-sm shadow-rose-500/20' : 'opacity-40 cursor-not-allowed bg-slate-300 dark:bg-slate-800 text-slate-500'"
+                    class="px-3.5 py-1.5 text-xs font-semibold rounded-lg flex items-center space-x-1.5 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+              <span>批量删除 ({{ selectedCids.length }})</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 选中状态通知条 -->
+        <div v-if="selectedCids.length > 0" 
+             :class="currentPlatform === 'antigravity' ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-100 dark:border-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-100 dark:border-emerald-900/50 text-emerald-700 dark:text-emerald-300'"
+             class="px-6 py-2 border-b flex items-center justify-between text-xs">
+          <div class="flex items-center space-x-2">
+            <span class="inline-block w-2 h-2 rounded-full animate-pulse" :class="currentPlatform === 'antigravity' ? 'bg-indigo-500' : 'bg-emerald-500'"></span>
+            <span>已勾选 <strong>{{ selectedCids.length }}</strong> 场 {{ currentPlatform === 'antigravity' ? 'Antigravity' : 'Codex' }} 会话，共计占用 <strong>{{ selectedTotalSizeStr }}</strong> 磁盘空间</span>
+          </div>
+          <button @click="selectedCids = []" class="underline hover:opacity-80">清空已选</button>
+        </div>
+
+        <!-- 会话列表主体 -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-2.5">
+          <!-- 空状态 -->
+          <div v-if="filteredConversations.length === 0" class="h-64 flex flex-col items-center justify-center text-slate-400">
+            <svg class="w-12 h-12 mb-3 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+            </svg>
+            <p class="text-sm">没有找到符合条件的会话记录</p>
+            <button v-if="searchQuery || selectedProject !== 'ALL' || timeFilter !== 'ALL' || sizeFilter !== 'ALL'" 
+                    @click="resetFilters" class="mt-2 text-xs text-indigo-600 dark:text-indigo-400 hover:underline">重置所有筛选条件</button>
+          </div>
+
+          <!-- 会话卡片条目 -->
+          <div v-for="conv in filteredConversations" :key="conv.id"
+               :class="[
+                 selectedCids.includes(conv.id) ? (currentPlatform === 'antigravity' ? 'border-indigo-500 bg-indigo-50/20 dark:bg-indigo-950/20' : 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20') : 'border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700',
+                 conv.id === activeSessionId ? 'ring-2 ring-emerald-500/50' : ''
+               ]"
+               class="p-4 rounded-xl border transition flex items-start space-x-3.5 group relative">
+            
+            <!-- 多选框 -->
+            <div class="pt-1">
+              <input type="checkbox" :value="conv.id" v-model="selectedCids" 
+                     :disabled="conv.id === activeSessionId"
+                     class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-offset-0 transition cursor-pointer">
+            </div>
+
+            <!-- 卡片内容 -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center space-x-2 flex-wrap gap-y-1">
+                <!-- 工程标签 -->
+                <span :class="getProjectBadgeClass(conv.project)" 
+                      class="px-2 py-0.5 text-[11px] font-semibold rounded-md flex items-center space-x-1 shrink-0">
+                  <span>{{ getProjectIcon(conv.project) }}</span>
+                  <span>{{ conv.project }}</span>
+                </span>
+
+                <!-- 当前活跃会话标识 (Antigravity 专有) -->
+                <span v-if="conv.id === activeSessionId" 
+                      class="px-2 py-0.5 text-[11px] font-bold rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center space-x-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                  <span>当前会话 (锁定中)</span>
+                </span>
+
+                <!-- 标题 (点击直接查看原生对话) -->
+                <h2 class="font-bold text-sm text-slate-800 dark:text-slate-100 truncate cursor-pointer hover:underline transition"
+                    @click="openDetailsDrawer(conv)">
+                  {{ conv.title }}
+                </h2>
+              </div>
+
+              <!-- 纯净用户提问预览 -->
+              <p v-if="conv.first_prompt" class="mt-1.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                {{ conv.first_prompt }}
+              </p>
+
+              <!-- 底部元信息 -->
+              <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-slate-400">
+                <!-- 时间 -->
+                <div class="flex items-center space-x-1">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <span>{{ conv.updated_time_str || conv.created_time_str || '未知时间' }}</span>
+                </div>
+
+                <!-- 体积 -->
+                <div class="flex items-center space-x-1 font-mono">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7z"></path>
+                  </svg>
+                  <span class="font-semibold text-slate-600 dark:text-slate-300">{{ conv.total_size_str }}</span>
+                </div>
+
+                <!-- 模型 (Codex 专有) -->
+                <div v-if="conv.model" class="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-slate-500">
+                  {{ conv.model }}
+                </div>
+
+                <!-- ID 摘要 -->
+                <div class="font-mono text-[10px] text-slate-400/80">ID: {{ conv.id.slice(0, 8) }}...</div>
+
+                <!-- 真实工作区路径预览 -->
+                <div v-if="conv.primary_workspace" class="truncate max-w-[280px] font-mono text-[10px] text-slate-400">
+                  📂 {{ conv.primary_workspace }}
+                </div>
+              </div>
+            </div>
+
+            <!-- 右侧单条操作按钮 -->
+            <div class="flex items-center space-x-1 shrink-0 pt-0.5">
+              <!-- 查看详情 (打开原生样式对话) -->
+              <button @click="openDetailsDrawer(conv)" 
+                      class="px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition flex items-center space-x-1">
+                <span>打开会话</span>
+              </button>
+
+              <!-- 快速导出 -->
+              <button @click="exportSingle(conv.id)" title="导出 Markdown"
+                      class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+              </button>
+
+              <!-- 单条删除 -->
+              <button @click="deleteOne(conv)" :disabled="conv.id === activeSessionId"
+                      :class="conv.id === activeSessionId ? 'opacity-30 cursor-not-allowed' : 'text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50'"
+                      class="p-1.5 rounded-lg transition" title="移入回收站">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- 抽屉：原生 Chat 对话体验视图 (100% 还原 Antigravity / Codex 对话界面) -->
+    <div v-if="drawerVisible" class="fixed inset-0 z-50 overflow-hidden flex justify-end bg-slate-900/40 backdrop-blur-sm transition-opacity">
+      <div class="w-full max-w-3xl bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col border-l border-slate-200 dark:border-slate-800 transform transition-transform">
+        
+        <!-- 抽屉顶部标题栏 -->
+        <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/70 dark:bg-slate-900/70 backdrop-blur">
+          <div class="min-w-0 flex-1 pr-4">
+            <div class="flex items-center space-x-2">
+              <span :class="getProjectBadgeClass(currentDetailConv?.project)" class="px-2 py-0.5 text-[10px] font-bold rounded">
+                {{ currentDetailConv?.project }}
+              </span>
+              <h3 class="font-bold text-sm truncate text-slate-900 dark:text-slate-100">{{ currentDetailConv?.title }}</h3>
+            </div>
+            <div class="mt-1 text-[11px] text-slate-400 font-mono flex items-center space-x-3 truncate">
+              <span>ID: {{ currentDetailConv?.id }}</span>
+              <span>体积: {{ currentDetailConv?.total_size_str }}</span>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button @click="exportSingle(currentDetailConv?.id)" class="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center space-x-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+              <span>导出 Markdown</span>
+            </button>
+            <button @click="drawerVisible = false" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 抽屉对话内容流 (仿 Antigravity 原生 Chat 体验) -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50 dark:bg-slate-950/50">
+          
+          <div v-if="loadingDetails" class="py-20 text-center text-slate-400">
+            <svg class="w-8 h-8 mx-auto animate-spin mb-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            <p class="text-xs">正在加载原生会话对话记录...</p>
+          </div>
+
+          <div v-else-if="conversationDetails" class="space-y-6">
+            <div v-if="conversationDetails.turns.length === 0" class="py-12 text-center text-slate-400 text-xs">
+              无对话消息记录
+            </div>
+
+            <!-- 每一轮对话 -->
+            <div v-for="(turn, idx) in conversationDetails.turns" :key="idx" class="space-y-3">
+              
+              <!-- 1. 用户提问气泡 (纯净人类可读，白底圆角卡片) -->
+              <div v-if="turn.role === 'user'" class="flex flex-col items-end">
+                <div class="max-w-[92%] bg-slate-200/70 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm border border-slate-300/40 dark:border-slate-700/60">
+                  <div class="text-xs font-normal whitespace-pre-wrap leading-relaxed">
+                    {{ turn.text }}
+                  </div>
+                </div>
+                <div class="text-[10px] text-slate-400 mt-1 mr-1 font-mono">{{ turn.time_str }}</div>
+              </div>
+
+              <!-- 2. 助手回答 (支持 Markdown 渲染 + 伸缩式 Worked for 思考工具栏) -->
+              <div v-else class="flex flex-col items-start w-full">
+                
+                <!-- 可折叠的思考 / 工具调用状态栏 (Worked for Xs >) -->
+                <div v-if="turn.tool_calls && turn.tool_calls.length > 0" class="mb-2">
+                  <button @click="toggleToolExpand(idx)" 
+                          class="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs flex items-center space-x-1.5 transition">
+                    <span class="text-amber-500">⚡</span>
+                    <span class="font-medium">Worked on {{ turn.tool_calls.length }} action{{ turn.tool_calls.length > 1 ? 's' : '' }}</span>
+                    <svg :class="{'rotate-90': expandedTools[idx]}" class="w-3 h-3 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                  </button>
+
+                  <!-- 展开后的工具调用明细卡片 -->
+                  <div v-if="expandedTools[idx]" class="mt-2 p-3 bg-slate-100/80 dark:bg-slate-900/80 rounded-lg border border-slate-200 dark:border-slate-800 space-y-2 max-w-xl">
+                    <div v-for="(tc, tcIdx) in turn.tool_calls" :key="tcIdx" class="text-xs font-mono">
+                      <div class="flex items-center space-x-2 text-indigo-600 dark:text-indigo-400 font-semibold">
+                        <span>▶</span>
+                        <span>{{ tc.name }}</span>
+                        <span class="text-[10px] text-slate-400 font-normal">({{ tc.action || '' }})</span>
+                      </div>
+                      <pre v-if="tc.args && Object.keys(tc.args).length > 0" class="mt-1 p-2 bg-slate-950 text-slate-300 rounded text-[10px] overflow-x-auto">{{ JSON.stringify(tc.args, null, 2) }}</pre>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 助手正文响应 (Markdown 美化渲染) -->
+                <div class="w-full bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl rounded-tl-sm p-4 shadow-sm">
+                  <div class="prose-custom text-xs text-slate-800 dark:text-slate-200" v-html="renderMarkdown(turn.text)"></div>
+                </div>
+                <div class="text-[10px] text-slate-400 mt-1 ml-1 font-mono">{{ turn.time_str }}</div>
+              </div>
+
+            </div>
+
+            <!-- 生成的工件文件列表 (Artifacts Cards) -->
+            <div v-if="conversationDetails.artifacts && conversationDetails.artifacts.length > 0" class="mt-8 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">📄 生成工件与产物文档 ({{ conversationDetails.artifacts.length }})</h4>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div v-for="art in conversationDetails.artifacts" :key="art.name" 
+                     class="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between shadow-sm">
+                  <div class="flex items-center space-x-2.5 truncate">
+                    <span class="text-lg">📄</span>
+                    <div class="truncate">
+                      <div class="font-medium text-xs truncate">{{ art.name }}</div>
+                      <div class="text-[10px] text-slate-400 font-mono">{{ art.size_str }}</div>
+                    </div>
+                  </div>
+                  <span class="px-2 py-0.5 text-[10px] rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-medium">工件</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗：当前平台独立回收站 -->
+    <div v-if="trashModalVisible" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+        
+        <!-- 弹窗头 -->
+        <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
+          <div class="flex items-center space-x-2">
+            <span class="text-xl">🗑️</span>
+            <div>
+              <h3 class="font-bold text-base text-slate-900 dark:text-slate-100">
+                {{ currentPlatform === 'antigravity' ? 'Antigravity' : 'Codex' }} 会话回收站
+              </h3>
+              <p class="text-xs text-slate-400">已删除会话暂存于此平台独立回收站中，支持随时一键恢复</p>
+            </div>
+          </div>
+          <button @click="trashModalVisible = false" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+
+        <!-- 动作栏 -->
+        <div class="px-4 py-2.5 bg-slate-100/60 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+          <div class="flex items-center space-x-2">
+            <span>回收站共 <strong>{{ currentPlatformTrashList.length }}</strong> 项</span>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button @click="restoreSelectedTrash" :disabled="selectedTrashKeys.length === 0"
+                    class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-medium rounded-md transition flex items-center space-x-1">
+              <span>↩️ 一键还原 ({{ selectedTrashKeys.length }})</span>
+            </button>
+            <button @click="purgeSelectedTrash" :disabled="selectedTrashKeys.length === 0"
+                    class="px-3 py-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white font-medium rounded-md transition flex items-center space-x-1">
+              <span>⚠️ 彻底粉碎</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 回收站列表 -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-2">
+          <div v-if="currentPlatformTrashList.length === 0" class="py-16 text-center text-slate-400 text-sm">
+            {{ currentPlatform === 'antigravity' ? 'Antigravity' : 'Codex' }} 回收站目前为空
+          </div>
+
+          <div v-for="item in currentPlatformTrashList" :key="item.trash_key"
+               class="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/60 flex items-center space-x-3">
+            <input type="checkbox" :value="item.trash_key" v-model="selectedTrashKeys" class="w-4 h-4 text-indigo-600 rounded">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center space-x-2">
+                <span class="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  {{ item.project }}
+                </span>
+                <span class="font-medium text-xs text-slate-800 dark:text-slate-200 truncate">{{ item.title }}</span>
+              </div>
+              <div class="mt-1 text-[10px] text-slate-400 flex items-center space-x-3">
+                <span>删除时间: {{ item.deleted_time_str }}</span>
+                <span>占用空间: {{ item.total_size_str }}</span>
+              </div>
+            </div>
+            <button @click="restoreSingleTrash(item.trash_key)" class="px-2 py-1 text-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 rounded border border-emerald-200 dark:border-emerald-800 transition">
+              还原
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗：批量删除确认 -->
+    <div v-if="confirmDeleteModalVisible" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6">
+        <div class="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mb-4">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+          </svg>
+        </div>
+        <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100">
+          确认移入 {{ currentPlatform === 'antigravity' ? 'Antigravity' : 'Codex' }} 回收站？
+        </h3>
+        <p class="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          即将把选中的 <strong>{{ selectedCids.length }}</strong> 场会话移入回收站，预计释放 <strong>{{ selectedTotalSizeStr }}</strong> 空间。<br>
+          数据将安全备份在本地回收站中，您随时可以在界面右上角「回收站」中一键还原。
+        </p>
+
+        <div class="mt-6 flex items-center justify-end space-x-3">
+          <button @click="confirmDeleteModalVisible = false" class="px-4 py-2 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            取消
+          </button>
+          <button @click="executeBatchDelete" :disabled="deleting" class="px-4 py-2 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-600/20 transition flex items-center space-x-1">
+            <span v-if="deleting" class="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+            <span>确定删除</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗：导出预览 -->
+    <div v-if="exportModalVisible" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
+          <h3 class="font-bold text-base text-slate-900 dark:text-slate-100">批量导出 Markdown 预览</h3>
+          <button @click="exportModalVisible = false" class="p-1 rounded-lg text-slate-400 hover:text-slate-600"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 bg-slate-50 dark:bg-slate-950 font-mono text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap">
+          {{ exportedContent }}
+        </div>
+        <div class="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-end space-x-2">
+          <button @click="copyExportedContent" class="px-4 py-2 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+            复制到剪贴板
+          </button>
+          <button @click="downloadExportedMarkdown" class="px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition">
+            下载 .md 文件
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部状态栏 -->
+    <footer class="h-7 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
+      <div class="flex items-center space-x-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span>当前环境：{{ currentPlatform === 'antigravity' ? 'Google Antigravity 独立模式' : 'OpenAI Codex 独立模式' }}</span>
+      </div>
+      <div>
+        <span>AI Conversation Batch Manager · 2026</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        const loading = ref(false);
+        const darkMode = ref(localStorage.getItem('theme') === 'dark' || window.matchMedia('(prefers-color-scheme: dark)').matches);
+        
+        // 平台选择：'antigravity' 或 'codex'
+        const currentPlatform = ref(localStorage.getItem('current_platform') || 'antigravity');
+        const platformCounts = ref({ antigravity: 0, codex: 0 });
+
+        const conversations = ref([]);
+        const projects = ref([]);
+        const stats = ref({});
+        const activeSessionId = ref('');
+        
+        // 筛选与选择
+        const selectedProject = ref('ALL');
+        const searchQuery = ref('');
+        const timeFilter = ref('ALL');
+        const sizeFilter = ref('ALL');
+        const sortBy = ref('time_desc');
+        const selectedCids = ref([]);
+
+        // 抽屉与展开状态
+        const drawerVisible = ref(false);
+        const loadingDetails = ref(false);
+        const currentDetailConv = ref(null);
+        const conversationDetails = ref(null);
+        const expandedTools = ref({});
+
+        const trashModalVisible = ref(false);
+        const trashList = ref([]);
+        const selectedTrashKeys = ref([]);
+
+        const confirmDeleteModalVisible = ref(false);
+        const deleting = ref(false);
+
+        const exportModalVisible = ref(false);
+        const exportedContent = ref('');
+
+        // 切换平台 (各操作各的)
+        const switchPlatform = (platform) => {
+          currentPlatform.value = platform;
+          localStorage.setItem('current_platform', platform);
+          selectedCids.value = [];
+          selectedProject.value = 'ALL';
+          searchQuery.value = '';
+          fetchConversations();
+        };
+
+        // 深浅模式切换
+        const toggleDarkMode = () => {
+          darkMode.value = !darkMode.value;
+          localStorage.setItem('theme', darkMode.value ? 'dark' : 'light');
+          document.documentElement.classList.toggle('dark', darkMode.value);
+        };
+
+        if (darkMode.value) {
+          document.documentElement.classList.add('dark');
+        }
+
+        // 获取会话数据
+        const fetchConversations = async () => {
+          loading.value = true;
+          try {
+            const res = await fetch(`/api/conversations?platform=${currentPlatform.value}`);
+            const data = await res.json();
+            if (data.success) {
+              conversations.value = data.conversations;
+              projects.value = data.projects;
+              stats.value = data.stats;
+              activeSessionId.value = data.active_session_id;
+              if (data.platform_counts) {
+                platformCounts.value = data.platform_counts;
+              }
+            }
+          } catch (e) {
+            console.error('Fetch error:', e);
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        // 拆分出真实工程与未归类独立会话
+        const realProjects = computed(() => {
+          return projects.value.filter(p => !p.name.includes('未关联') && !p.name.includes('独立会话') && !p.name.includes('未分类'));
+        });
+
+        const unfiledProject = computed(() => {
+          return projects.value.find(p => p.name.includes('未关联') || p.name.includes('独立会话') || p.name.includes('未分类'));
+        });
+
+        // 当前平台的回收站列表过滤
+        const currentPlatformTrashList = computed(() => {
+          return trashList.value.filter(t => {
+            if (currentPlatform.value === 'codex') {
+              return t.platform === 'codex' || (t.trash_key && t.trash_key.startsWith('codex_'));
+            } else {
+              return t.platform !== 'codex' && !(t.trash_key && t.trash_key.startsWith('codex_'));
+            }
+          });
+        });
+
+        const currentTrashCount = computed(() => {
+          return currentPlatformTrashList.value.length;
+        });
+
+        // 过滤会话列表
+        const filteredConversations = computed(() => {
+          let list = [...conversations.value];
+
+          // 1. 工程过滤
+          if (selectedProject.value !== 'ALL') {
+            list = list.filter(c => c.project === selectedProject.value);
+          }
+
+          // 2. 搜索过滤
+          if (searchQuery.value.trim()) {
+            const q = searchQuery.value.toLowerCase().trim();
+            list = list.filter(c => 
+              (c.title && c.title.toLowerCase().includes(q)) ||
+              (c.first_prompt && c.first_prompt.toLowerCase().includes(q)) ||
+              (c.id && c.id.toLowerCase().includes(q)) ||
+              (c.primary_workspace && c.primary_workspace.toLowerCase().includes(q))
+            );
+          }
+
+          // 3. 时间过滤
+          const now = Date.now() / 1000;
+          if (timeFilter.value === '7D') {
+            list = list.filter(c => (c.updated_ts || 0) < now - 7 * 86400);
+          } else if (timeFilter.value === '14D') {
+            list = list.filter(c => (c.updated_ts || 0) < now - 14 * 86400);
+          } else if (timeFilter.value === '30D') {
+            list = list.filter(c => (c.updated_ts || 0) < now - 30 * 86400);
+          }
+
+          // 4. 体积过滤
+          if (sizeFilter.value === '100K') {
+            list = list.filter(c => (c.total_size || 0) > 100 * 1024);
+          } else if (sizeFilter.value === '1M') {
+            list = list.filter(c => (c.total_size || 0) > 1024 * 1024);
+          } else if (sizeFilter.value === '5M') {
+            list = list.filter(c => (c.total_size || 0) > 5 * 1024 * 1024);
+          }
+
+          // 5. 排序
+          if (sortBy.value === 'time_desc') {
+            list.sort((a, b) => (b.updated_ts || 0) - (a.updated_ts || 0));
+          } else if (sortBy.value === 'time_asc') {
+            list.sort((a, b) => (a.updated_ts || 0) - (b.updated_ts || 0));
+          } else if (sortBy.value === 'size_desc') {
+            list.sort((a, b) => (b.total_size || 0) - (a.total_size || 0));
+          }
+
+          return list;
+        });
+
+        // 选中项总占用计算
+        const selectedTotalSizeStr = computed(() => {
+          const size = conversations.value
+            .filter(c => selectedCids.value.includes(c.id))
+            .reduce((acc, cur) => acc + (cur.total_size || 0), 0);
+          if (size < 1024) return size + ' B';
+          if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB';
+          return (size / (1024 * 1024)).toFixed(2) + ' MB';
+        });
+
+        const isAllFilteredSelected = computed(() => {
+          const selectable = filteredConversations.value.filter(c => c.id !== activeSessionId.value);
+          if (selectable.length === 0) return false;
+          return selectable.every(c => selectedCids.value.includes(c.id));
+        });
+
+        const toggleSelectFiltered = () => {
+          const selectable = filteredConversations.value.filter(c => c.id !== activeSessionId.value);
+          if (isAllFilteredSelected.value) {
+            const currentIds = new Set(selectable.map(c => c.id));
+            selectedCids.value = selectedCids.value.filter(id => !currentIds.has(id));
+          } else {
+            const set = new Set(selectedCids.value);
+            selectable.forEach(c => set.add(c.id));
+            selectedCids.value = Array.from(set);
+          }
+        };
+
+        const resetFilters = () => {
+          selectedProject.value = 'ALL';
+          searchQuery.value = '';
+          timeFilter.value = 'ALL';
+          sizeFilter.value = 'ALL';
+        };
+
+        // 展开/收起工具调用
+        const toggleToolExpand = (idx) => {
+          expandedTools.value[idx] = !expandedTools.value[idx];
+        };
+
+        // Markdown 渲染
+        const renderMarkdown = (content) => {
+          if (!content) return '';
+          if (window.marked && typeof window.marked.parse === 'function') {
+            try {
+              return window.marked.parse(content);
+            } catch (e) {
+              console.error(e);
+            }
+          }
+          // 兜底渲染换行
+          return content.replace(/\n/g, '<br>');
+        };
+
+        // 查看会话详情
+        const openDetailsDrawer = async (conv) => {
+          currentDetailConv.value = conv;
+          drawerVisible.value = true;
+          loadingDetails.value = true;
+          conversationDetails.value = null;
+          expandedTools.value = {};
+          try {
+            const res = await fetch(`/api/conversation/${conv.id}`);
+            const data = await res.json();
+            if (data.success) {
+              conversationDetails.value = data.data;
+            }
+          } catch (e) {
+            console.error(e);
+          } finally {
+            loadingDetails.value = false;
+          }
+        };
+
+        // 单条删除
+        const deleteOne = (conv) => {
+          if (conv.id === activeSessionId.value) return;
+          selectedCids.value = [conv.id];
+          confirmDeleteModalVisible.value = true;
+        };
+
+        // 批量删除准备
+        const confirmBatchDelete = () => {
+          if (selectedCids.value.length === 0) return;
+          confirmDeleteModalVisible.value = true;
+        };
+
+        // 执行删除
+        const executeBatchDelete = async () => {
+          deleting.value = true;
+          try {
+            const items = selectedCids.value.map(id => ({ id, platform: currentPlatform.value }));
+            const res = await fetch('/api/conversations/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cids: selectedCids.value, items })
+            });
+            const data = await res.json();
+            if (data.success) {
+              confirmDeleteModalVisible.value = false;
+              selectedCids.value = [];
+              await fetchConversations();
+              await loadTrashData();
+            } else {
+              alert('删除失败: ' + data.error);
+            }
+          } catch (e) {
+            alert('网络错误: ' + e);
+          } finally {
+            deleting.value = false;
+          }
+        };
+
+        // 回收站管理
+        const loadTrashData = async () => {
+          try {
+            const res = await fetch('/api/trash');
+            const data = await res.json();
+            if (data.success) {
+              trashList.value = data.items;
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        };
+
+        const openTrashModal = async () => {
+          trashModalVisible.value = true;
+          selectedTrashKeys.value = [];
+          await loadTrashData();
+        };
+
+        const restoreSingleTrash = async (key) => {
+          try {
+            const res = await fetch('/api/trash/restore', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ trash_keys: [key] })
+            });
+            const data = await res.json();
+            if (data.success) {
+              await loadTrashData();
+              await fetchConversations();
+            }
+          } catch (e) {
+            alert('还原失败: ' + e);
+          }
+        };
+
+        const restoreSelectedTrash = async () => {
+          if (selectedTrashKeys.value.length === 0) return;
+          try {
+            const res = await fetch('/api/trash/restore', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ trash_keys: selectedTrashKeys.value })
+            });
+            const data = await res.json();
+            if (data.success) {
+              selectedTrashKeys.value = [];
+              await loadTrashData();
+              await fetchConversations();
+            }
+          } catch (e) {
+            alert('还原失败: ' + e);
+          }
+        };
+
+        const purgeSelectedTrash = async () => {
+          if (!confirm('彻底删除后将无法恢复，确认清空选中项？')) return;
+          try {
+            const res = await fetch('/api/trash/purge', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ trash_keys: selectedTrashKeys.value })
+            });
+            const data = await res.json();
+            if (data.success) {
+              selectedTrashKeys.value = [];
+              await loadTrashData();
+              await fetchConversations();
+            }
+          } catch (e) {
+            alert('粉碎失败: ' + e);
+          }
+        };
+
+        // 导出相关
+        const exportSingle = (cid) => {
+          window.open(`/api/export/markdown/${cid}`, '_blank');
+        };
+
+        const batchExport = async () => {
+          if (selectedCids.value.length === 0) return;
+          try {
+            const res = await fetch('/api/conversations/export', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cids: selectedCids.value })
+            });
+            const data = await res.json();
+            if (data.success) {
+              exportedContent.value = data.content;
+              exportModalVisible.value = true;
+            }
+          } catch (e) {
+            alert('导出错误: ' + e);
+          }
+        };
+
+        const copyExportedContent = () => {
+          navigator.clipboard.writeText(exportedContent.value);
+          alert('已复制到剪贴板！');
+        };
+
+        const downloadExportedMarkdown = () => {
+          const blob = new Blob([exportedContent.value], { type: 'text/markdown;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${currentPlatform.value}_export_${Date.now()}.md`;
+          link.click();
+          URL.revokeObjectURL(url);
+        };
+
+        // 辅助样式
+        const getProjectIcon = (name) => {
+          if (!name || name.includes('未关联')) return '💬';
+          const n = name.toLowerCase();
+          if (n.includes('web') || n.includes('front') || n.includes('ui')) return '🌐';
+          if (n.includes('api') || n.includes('back') || n.includes('serv')) return '⚙️';
+          if (n.includes('ai') || n.includes('agent') || n.includes('bot') || n.includes('gpt')) return '🤖';
+          if (n.includes('data') || n.includes('db') || n.includes('sql')) return '📊';
+          if (n.includes('doc') || n.includes('book')) return '📄';
+          if (n.includes('tool') || n.includes('manager') || n.includes('util')) return '🛠️';
+          if (n.includes('app') || n.includes('ios') || n.includes('android')) return '📱';
+          return '📁';
+        };
+
+        const getProjectBadgeClass = (name) => {
+          if (!name || name.includes('未关联')) return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700';
+          const hash = Array.from(name).reduce((acc, char) => acc + char.charCodeAt(0), 0);
+          const colorStyles = [
+            'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800',
+            'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800',
+            'bg-amber-50 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800',
+            'bg-purple-50 text-purple-700 dark:bg-purple-950/70 dark:text-purple-300 border border-purple-200 dark:border-purple-800',
+            'bg-rose-50 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-200 dark:border-rose-800',
+            'bg-sky-50 text-sky-700 dark:bg-sky-950/70 dark:text-sky-300 border border-sky-200 dark:border-sky-800',
+            'bg-teal-50 text-teal-700 dark:bg-teal-950/70 dark:text-teal-300 border border-teal-200 dark:border-teal-800'
+          ];
+          return colorStyles[hash % colorStyles.length];
+        };
+
+        onMounted(() => {
+          fetchConversations();
+          loadTrashData();
+        });
+
+        return {
+          loading,
+          darkMode,
+          currentPlatform,
+          platformCounts,
+          switchPlatform,
+          conversations,
+          projects,
+          realProjects,
+          unfiledProject,
+          stats,
+          activeSessionId,
+          selectedProject,
+          searchQuery,
+          timeFilter,
+          sizeFilter,
+          sortBy,
+          selectedCids,
+          filteredConversations,
+          selectedTotalSizeStr,
+          isAllFilteredSelected,
+          toggleSelectFiltered,
+          resetFilters,
+          drawerVisible,
+          loadingDetails,
+          currentDetailConv,
+          conversationDetails,
+          expandedTools,
+          toggleToolExpand,
+          renderMarkdown,
+          openDetailsDrawer,
+          deleteOne,
+          confirmBatchDelete,
+          confirmDeleteModalVisible,
+          deleting,
+          executeBatchDelete,
+          trashModalVisible,
+          trashList,
+          currentPlatformTrashList,
+          currentTrashCount,
+          selectedTrashKeys,
+          openTrashModal,
+          restoreSingleTrash,
+          restoreSelectedTrash,
+          purgeSelectedTrash,
+          exportSingle,
+          batchExport,
+          exportModalVisible,
+          exportedContent,
+          copyExportedContent,
+          downloadExportedMarkdown,
+          toggleDarkMode,
+          fetchConversations,
+          getProjectIcon,
+          getProjectBadgeClass
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
