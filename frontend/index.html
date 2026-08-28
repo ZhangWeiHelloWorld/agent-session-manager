@@ -300,8 +300,10 @@
           <!-- 批量操作动作区 -->
           <div class="flex items-center space-x-2 shrink-0">
             <!-- 批量全选/反选快捷按钮 -->
-            <button @click="toggleSelectFiltered" class="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 transition">
-              {{ isAllFilteredSelected ? '取消全选' : '全选筛选结果 (' + filteredConversations.length + ')' }}
+            <button @click="toggleSelectFiltered" 
+                    :disabled="selectableFilteredConversations.length === 0"
+                    class="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 transition flex items-center space-x-1.5">
+              <span>{{ isAllFilteredSelected ? '取消全选' : '全选 (' + selectableFilteredConversations.length + ')' }}</span>
             </button>
 
             <!-- 批量导出 -->
@@ -316,25 +318,48 @@
 
             <!-- 批量移入回收站 -->
             <button @click="confirmBatchDelete" :disabled="selectedCids.length === 0"
-                    :class="selectedCids.length > 0 ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-sm shadow-rose-500/20' : 'opacity-40 cursor-not-allowed bg-slate-300 dark:bg-slate-800 text-slate-500'"
+                    :class="selectedCids.length > 0 ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-600/20' : 'opacity-40 cursor-not-allowed bg-slate-200 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-800'"
                     class="px-3.5 py-1.5 text-xs font-semibold rounded-lg flex items-center space-x-1.5 transition">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
               </svg>
-              <span>批量删除 ({{ selectedCids.length }})</span>
+              <span>移入回收站 ({{ selectedCids.length }})</span>
             </button>
           </div>
         </div>
 
-        <!-- 选中状态通知条 -->
-        <div v-if="selectedCids.length > 0" 
-             :class="currentPlatform === 'antigravity' ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-100 dark:border-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-100 dark:border-emerald-900/50 text-emerald-700 dark:text-emerald-300'"
-             class="px-6 py-2 border-b flex items-center justify-between text-xs">
-          <div class="flex items-center space-x-2">
-            <span class="inline-block w-2 h-2 rounded-full animate-pulse" :class="currentPlatform === 'antigravity' ? 'bg-indigo-500' : 'bg-emerald-500'"></span>
-            <span>已勾选 <strong>{{ selectedCids.length }}</strong> 场 {{ currentPlatform === 'antigravity' ? 'Antigravity' : 'Codex' }} 会话，共计占用 <strong>{{ selectedTotalSizeStr }}</strong> 磁盘空间</span>
+        <!-- 列表顶部全选控制与选中状态栏 -->
+        <div class="px-5 py-2.5 bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between text-xs shrink-0">
+          <div class="flex items-center space-x-3">
+            <label class="flex items-center space-x-2.5 cursor-pointer select-none">
+              <input type="checkbox" 
+                     :checked="isAllFilteredSelected" 
+                     :indeterminate.prop="isIndeterminateSelected"
+                     @change="toggleSelectFiltered" 
+                     :disabled="selectableFilteredConversations.length === 0"
+                     class="w-4 h-4 text-indigo-600 rounded border-slate-300 dark:border-slate-700 focus:ring-offset-0 transition cursor-pointer">
+              <span class="font-medium text-slate-700 dark:text-slate-200">
+                <template v-if="selectedCids.length > 0">
+                  已勾选 <strong class="text-indigo-600 dark:text-indigo-400">{{ selectedCids.length }}</strong> / {{ selectableFilteredConversations.length }} 场会话 (共 {{ selectedTotalSizeStr }})
+                </template>
+                <template v-else>
+                  全选列表 (共 {{ filteredConversations.length }} 场，占用 {{ filteredTotalSizeStr }})
+                </template>
+              </span>
+            </label>
           </div>
-          <button @click="selectedCids = []" class="underline hover:opacity-80">清空已选</button>
+          
+          <div class="flex items-center space-x-2">
+            <template v-if="selectedCids.length > 0">
+              <button @click="confirmBatchDelete" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-rose-600 hover:bg-rose-700 text-white flex items-center space-x-1 shadow-sm transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <span>批量移入回收站 ({{ selectedCids.length }})</span>
+              </button>
+              <button @click="selectedCids = []" class="px-2 py-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline">
+                清空已选
+              </button>
+            </template>
+          </div>
         </div>
 
         <!-- 会话列表主体 -->
@@ -591,7 +616,11 @@
         <!-- 动作栏 -->
         <div class="px-4 py-2.5 bg-slate-100/60 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
           <div class="flex items-center space-x-2">
-            <span>回收站共 <strong>{{ currentPlatformTrashList.length }}</strong> 项</span>
+            <button @click="toggleSelectAllTrash" :disabled="currentPlatformTrashList.length === 0"
+                    class="px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 transition">
+              <span>{{ isAllTrashSelected ? '取消全选' : '全选回收站 (' + currentPlatformTrashList.length + ')' }}</span>
+            </button>
+            <span class="text-slate-400">回收站共 <strong>{{ currentPlatformTrashList.length }}</strong> 项</span>
           </div>
           <div class="flex items-center space-x-2">
             <button @click="restoreSelectedTrash" :disabled="selectedTrashKeys.length === 0"
@@ -634,31 +663,69 @@
       </div>
     </div>
 
-    <!-- 弹窗：批量删除确认 -->
+    <!-- 弹窗：移入回收站确认 -->
     <div v-if="confirmDeleteModalVisible" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
       <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6">
         <div class="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mb-4">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
           </svg>
         </div>
-        <h3 class="font-bold text-lg text-slate-900 dark:text-slate-100">
-          确认移入 {{ currentPlatform === 'antigravity' ? 'Antigravity' : 'Codex' }} 回收站？
+        <h3 class="font-bold text-base text-slate-900 dark:text-slate-100">
+          <template v-if="deleteModalMode === 'all'">
+            ⚡ 确认一键将全部筛选会话移入回收站？
+          </template>
+          <template v-else-if="deleteModalMode === 'single'">
+            🗑️ 确认将此会话移入回收站？
+          </template>
+          <template v-else>
+            🗑️ 确认将选中的 {{ selectedCids.length }} 场会话移入回收站？
+          </template>
         </h3>
-        <p class="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-          即将把选中的 <strong>{{ selectedCids.length }}</strong> 场会话移入回收站，预计释放 <strong>{{ selectedTotalSizeStr }}</strong> 空间。<br>
-          数据将安全备份在本地回收站中，您随时可以在界面右上角「回收站」中一键还原。
-        </p>
+        
+        <div class="mt-3 text-xs text-slate-600 dark:text-slate-300 space-y-2.5">
+          <p>
+            即将把选中的 <strong class="text-rose-600 dark:text-rose-400 font-bold font-mono">{{ selectedCids.length }}</strong> 场 {{ currentPlatform === 'antigravity' ? 'Antigravity' : 'Codex' }} 会话移入回收站，预计释放 <strong class="font-mono text-slate-900 dark:text-slate-100">{{ selectedTotalSizeStr }}</strong> 磁盘空间。
+          </p>
+          
+          <div class="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-emerald-800 dark:text-emerald-300 flex items-start space-x-2">
+            <span class="text-base shrink-0">🛡️</span>
+            <div class="leading-relaxed">
+              <strong>安全保障</strong>：会话记录将完整转移至本地回收站暂存，绝不直接物理粉碎。您随时可以在右上角「回收站」中一键恢复还原。
+            </div>
+          </div>
+        </div>
 
         <div class="mt-6 flex items-center justify-end space-x-3">
           <button @click="confirmDeleteModalVisible = false" class="px-4 py-2 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
             取消
           </button>
-          <button @click="executeBatchDelete" :disabled="deleting" class="px-4 py-2 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-600/20 transition flex items-center space-x-1">
+          <button @click="executeBatchDelete" :disabled="deleting" class="px-4 py-2 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-600/20 transition flex items-center space-x-1.5">
             <span v-if="deleting" class="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-            <span>确定删除</span>
+            <span>确定移入回收站</span>
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- 浮动 Toast 提示与一键撤销 -->
+    <div v-if="toast.visible" 
+         class="fixed bottom-10 right-6 z-50 max-w-md bg-slate-900/95 dark:bg-slate-800/95 text-white rounded-xl shadow-2xl p-4 border border-slate-700 flex items-center space-x-3 backdrop-blur transition-all duration-300">
+      <span class="text-xl shrink-0">🗑️</span>
+      <div class="flex-1 min-w-0 text-xs">
+        <div class="font-bold text-slate-100">{{ toast.title }}</div>
+        <div class="text-slate-300 text-[11px] truncate mt-0.5">{{ toast.message }}</div>
+      </div>
+      <div class="flex items-center space-x-1.5 shrink-0">
+        <button v-if="toast.canUndo" @click="undoLastDelete" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-xs transition flex items-center space-x-1 shadow-sm">
+          <span>↩️ 撤销</span>
+        </button>
+        <button @click="openTrashModal" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-300 font-medium rounded-lg text-xs transition">
+          回收站
+        </button>
+        <button @click="toast.visible = false" class="p-1 text-slate-400 hover:text-slate-200">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
       </div>
     </div>
 
@@ -732,7 +799,25 @@
         const selectedTrashKeys = ref([]);
 
         const confirmDeleteModalVisible = ref(false);
+        const deleteModalMode = ref('batch'); // 'all', 'batch', 'single'
         const deleting = ref(false);
+
+        const toast = ref({
+          visible: false,
+          title: '',
+          message: '',
+          canUndo: false
+        });
+        const lastDeletedTrashKeys = ref([]);
+        let toastTimer = null;
+
+        const showToast = (title, message, canUndo = false) => {
+          toast.value = { visible: true, title, message, canUndo };
+          if (toastTimer) clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => {
+            toast.value.visible = false;
+          }, 8000);
+        };
 
         const exportModalVisible = ref(false);
         const exportedContent = ref('');
@@ -804,6 +889,19 @@
           return currentPlatformTrashList.value.length;
         });
 
+        const isAllTrashSelected = computed(() => {
+          if (currentPlatformTrashList.value.length === 0) return false;
+          return currentPlatformTrashList.value.every(t => selectedTrashKeys.value.includes(t.trash_key));
+        });
+
+        const toggleSelectAllTrash = () => {
+          if (isAllTrashSelected.value) {
+            selectedTrashKeys.value = [];
+          } else {
+            selectedTrashKeys.value = currentPlatformTrashList.value.map(t => t.trash_key);
+          }
+        };
+
         // 过滤会话列表
         const filteredConversations = computed(() => {
           let list = [...conversations.value];
@@ -855,6 +953,19 @@
           return list;
         });
 
+        // 可供勾选/操作的会话（自动排除 Antigravity 当前锁定会话）
+        const selectableFilteredConversations = computed(() => {
+          return filteredConversations.value.filter(c => c.id !== activeSessionId.value);
+        });
+
+        // 筛选结果总占用计算
+        const filteredTotalSizeStr = computed(() => {
+          const size = filteredConversations.value.reduce((acc, cur) => acc + (cur.total_size || 0), 0);
+          if (size < 1024) return size + ' B';
+          if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB';
+          return (size / (1024 * 1024)).toFixed(2) + ' MB';
+        });
+
         // 选中项总占用计算
         const selectedTotalSizeStr = computed(() => {
           const size = conversations.value
@@ -866,13 +977,20 @@
         });
 
         const isAllFilteredSelected = computed(() => {
-          const selectable = filteredConversations.value.filter(c => c.id !== activeSessionId.value);
+          const selectable = selectableFilteredConversations.value;
           if (selectable.length === 0) return false;
           return selectable.every(c => selectedCids.value.includes(c.id));
         });
 
+        const isIndeterminateSelected = computed(() => {
+          const selectable = selectableFilteredConversations.value;
+          if (selectable.length === 0) return false;
+          const hasSome = selectable.some(c => selectedCids.value.includes(c.id));
+          return hasSome && !isAllFilteredSelected.value;
+        });
+
         const toggleSelectFiltered = () => {
-          const selectable = filteredConversations.value.filter(c => c.id !== activeSessionId.value);
+          const selectable = selectableFilteredConversations.value;
           if (isAllFilteredSelected.value) {
             const currentIds = new Set(selectable.map(c => c.id));
             selectedCids.value = selectedCids.value.filter(id => !currentIds.has(id));
@@ -881,6 +999,18 @@
             selectable.forEach(c => set.add(c.id));
             selectedCids.value = Array.from(set);
           }
+        };
+
+        // 一键全选并弹出移入回收站确认
+        const oneClickSelectAllAndDelete = () => {
+          const selectable = selectableFilteredConversations.value;
+          if (selectable.length === 0) {
+            alert('当前筛选视图下没有可删除的会话记录');
+            return;
+          }
+          selectedCids.value = selectable.map(c => c.id);
+          deleteModalMode.value = 'all';
+          confirmDeleteModalVisible.value = true;
         };
 
         const resetFilters = () => {
@@ -934,16 +1064,18 @@
         const deleteOne = (conv) => {
           if (conv.id === activeSessionId.value) return;
           selectedCids.value = [conv.id];
+          deleteModalMode.value = 'single';
           confirmDeleteModalVisible.value = true;
         };
 
         // 批量删除准备
         const confirmBatchDelete = () => {
           if (selectedCids.value.length === 0) return;
+          deleteModalMode.value = 'batch';
           confirmDeleteModalVisible.value = true;
         };
 
-        // 执行删除
+        // 执行移入回收站
         const executeBatchDelete = async () => {
           deleting.value = true;
           try {
@@ -956,16 +1088,47 @@
             const data = await res.json();
             if (data.success) {
               confirmDeleteModalVisible.value = false;
+              const count = data.count || selectedCids.value.length;
+              const freedStr = data.freed_str || selectedTotalSizeStr.value;
+              lastDeletedTrashKeys.value = data.trash_keys || [];
               selectedCids.value = [];
               await fetchConversations();
               await loadTrashData();
+              showToast(
+                '🗑️ 已安全移入回收站',
+                `成功将 ${count} 场会话移入回收站，释放 ${freedStr} 空间`,
+                lastDeletedTrashKeys.value.length > 0
+              );
             } else {
-              alert('删除失败: ' + data.error);
+              alert('移入回收站失败: ' + data.error);
             }
           } catch (e) {
             alert('网络错误: ' + e);
           } finally {
             deleting.value = false;
+          }
+        };
+
+        // 一键撤销还原刚删除的会话
+        const undoLastDelete = async () => {
+          if (!lastDeletedTrashKeys.value || lastDeletedTrashKeys.value.length === 0) return;
+          try {
+            const res = await fetch('/api/trash/restore', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ trash_keys: lastDeletedTrashKeys.value })
+            });
+            const data = await res.json();
+            if (data.success) {
+              showToast('↩️ 撤销还原成功', `已成功还原 ${data.count} 场会话`, false);
+              lastDeletedTrashKeys.value = [];
+              await fetchConversations();
+              await loadTrashData();
+            } else {
+              alert('撤销还原失败: ' + data.error);
+            }
+          } catch (e) {
+            alert('网络错误: ' + e);
           }
         };
 
@@ -997,6 +1160,7 @@
             });
             const data = await res.json();
             if (data.success) {
+              showToast('↩️ 还原成功', `已成功还原 1 场会话`, false);
               await loadTrashData();
               await fetchConversations();
             }
@@ -1015,6 +1179,7 @@
             });
             const data = await res.json();
             if (data.success) {
+              showToast('↩️ 还原成功', `已成功还原 ${data.count} 场会话`, false);
               selectedTrashKeys.value = [];
               await loadTrashData();
               await fetchConversations();
@@ -1034,6 +1199,7 @@
             });
             const data = await res.json();
             if (data.success) {
+              showToast('⚠️ 彻底粉碎', `已彻底删除 ${data.count} 场会话`, false);
               selectedTrashKeys.value = [];
               await loadTrashData();
               await fetchConversations();
@@ -1069,7 +1235,7 @@
 
         const copyExportedContent = () => {
           navigator.clipboard.writeText(exportedContent.value);
-          alert('已复制到剪贴板！');
+          showToast('📋 已复制', '会话 Markdown 已成功复制到剪贴板', false);
         };
 
         const downloadExportedMarkdown = () => {
@@ -1135,9 +1301,13 @@
           sortBy,
           selectedCids,
           filteredConversations,
+          selectableFilteredConversations,
+          filteredTotalSizeStr,
           selectedTotalSizeStr,
           isAllFilteredSelected,
+          isIndeterminateSelected,
           toggleSelectFiltered,
+          oneClickSelectAllAndDelete,
           resetFilters,
           drawerVisible,
           loadingDetails,
@@ -1150,13 +1320,19 @@
           deleteOne,
           confirmBatchDelete,
           confirmDeleteModalVisible,
+          deleteModalMode,
           deleting,
           executeBatchDelete,
+          toast,
+          showToast,
+          undoLastDelete,
           trashModalVisible,
           trashList,
           currentPlatformTrashList,
           currentTrashCount,
           selectedTrashKeys,
+          isAllTrashSelected,
+          toggleSelectAllTrash,
           openTrashModal,
           restoreSingleTrash,
           restoreSelectedTrash,

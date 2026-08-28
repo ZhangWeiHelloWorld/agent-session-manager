@@ -253,6 +253,9 @@ class TestCodexDockerPathResolution(unittest.TestCase):
         # 测试移入回收站与还原
         del_res = self.storage.move_to_trash([self.cid])
         self.assertTrue(del_res['success'])
+        self.assertIn('items', del_res)
+        self.assertEqual(len(del_res['items']), 1)
+        self.assertEqual(del_res['items'][0]['id'], self.cid)
         self.assertFalse(os.path.exists(self.actual_rollout_path))
 
         trash_items = self.storage.list_trash()
@@ -262,6 +265,56 @@ class TestCodexDockerPathResolution(unittest.TestCase):
         restore_res = self.storage.restore_from_trash([tkey])
         self.assertTrue(restore_res['success'])
         self.assertTrue(os.path.exists(self.actual_rollout_path))
+
+
+class TestTrashManagerBatch(unittest.TestCase):
+    def setUp(self):
+        self.temp_base = os.path.join(CURRENT_DIR, 'temp_test_workspace_batch_trash')
+        if os.path.exists(self.temp_base):
+            shutil.rmtree(self.temp_base)
+        os.makedirs(self.temp_base, exist_ok=True)
+        os.makedirs(os.path.join(self.temp_base, 'conversations'), exist_ok=True)
+        os.makedirs(os.path.join(self.temp_base, 'brain'), exist_ok=True)
+        os.makedirs(os.path.join(self.temp_base, 'annotations'), exist_ok=True)
+
+        self.cids = [f'test-batch-uuid-{i}' for i in range(5)]
+        for cid in self.cids:
+            with open(os.path.join(self.temp_base, 'conversations', f'{cid}.db'), 'w') as f:
+                f.write(f'fake db {cid}')
+            brain_p = os.path.join(self.temp_base, 'brain', cid)
+            os.makedirs(brain_p, exist_ok=True)
+            with open(os.path.join(brain_p, 'file.txt'), 'w') as f:
+                f.write('content')
+
+        self.trash = TrashManager(self.temp_base)
+
+    def tearDown(self):
+        if os.path.exists(self.temp_base):
+            shutil.rmtree(self.temp_base)
+
+    def test_batch_move_to_trash_and_restore_all(self):
+        """测试批量全选移入回收站与批量一键还原"""
+        del_res = self.trash.move_to_trash(self.cids)
+        self.assertTrue(del_res['success'])
+        self.assertEqual(del_res['count'], 5)
+        self.assertIn('items', del_res)
+        self.assertEqual(len(del_res['items']), 5)
+
+        # 验证回收站列表
+        trash_items = self.trash.list_trash()
+        self.assertEqual(len(trash_items), 5)
+        tkeys = [it['trash_key'] for it in trash_items]
+
+        # 批量一键还原全部
+        rest_res = self.trash.restore_from_trash(tkeys)
+        self.assertTrue(rest_res['success'])
+        self.assertEqual(rest_res['count'], 5)
+        self.assertEqual(len(self.trash.list_trash()), 0)
+
+        # 验证文件均已完整还原
+        for cid in self.cids:
+            self.assertTrue(os.path.exists(os.path.join(self.temp_base, 'conversations', f'{cid}.db')))
+            self.assertTrue(os.path.exists(os.path.join(self.temp_base, 'brain', cid, 'file.txt')))
 
 
 if __name__ == '__main__':

@@ -427,7 +427,8 @@ class CodexStorage:
                 'count': moved_count,
                 'freed_bytes': total_freed,
                 'freed_str': format_bytes(total_freed),
-                'message': f"成功将 {moved_count} 个 Codex 会话移入回收站"
+                'message': f"成功将 {moved_count} 个 Codex 会话移入回收站",
+                'items': details
             }
         except Exception as e:
             return {'success': False, 'error': f"删除 Codex 会话失败: {e}"}

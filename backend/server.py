@@ -294,21 +294,29 @@ class UnifiedAPIHandler(BaseHTTPRequestHandler):
 
                 total_moved = 0
                 total_freed = 0
+                moved_trash_keys = []
                 if agy_cids:
                     res1 = self.agy_trash.move_to_trash(agy_cids)
                     total_moved += res1.get('count', 0)
                     total_freed += res1.get('freed_bytes', 0)
+                    for it in res1.get('items', []):
+                        if 'trash_key' in it:
+                            moved_trash_keys.append(it['trash_key'])
 
                 if codex_cids:
                     res2 = self.codex_storage.move_to_trash(codex_cids)
                     total_moved += res2.get('count', 0)
                     total_freed += res2.get('freed_bytes', 0)
+                    for it in res2.get('items', []):
+                        if 'trash_key' in it:
+                            moved_trash_keys.append(it['trash_key'])
 
                 self._send_json({
                     'success': True,
                     'count': total_moved,
                     'freed_bytes': total_freed,
                     'freed_str': format_bytes(total_freed),
+                    'trash_keys': moved_trash_keys,
                     'message': f"成功移入回收站 {total_moved} 场会话"
                 })
             except Exception as e:
